@@ -4,6 +4,14 @@ import { join } from 'node:path';
 // Tiny stack VM for make.fun's ISA v1. One program.bin on its input.bin,
 // answering with exactly the bytes it writes and the exit code it ends with.
 // Written from ISA.md; every trap, limit and wrapping rule follows it.
+// Pops (PU8) and pushes (PW8) of opcodes 0..7, as a lookup table built once.
+// Same values as the old string-index decode, except b = 7 (ROT3): the old
+// string '0110233' has only 7 chars, so w was NaN and the overflow check
+// s - u + w > 256 was always false; the table gives w = 0, and s - 3 + 0 > 256
+// is likewise always false (s <= 256), so no trap behaviour changes.
+const PU8 = new Int32Array([0, 0, 0, 1, 1, 2, 2, 3]);
+const PW8 = new Int32Array([0, 1, 1, 0, 2, 3, 3, 0]);
+
 function run(p, q) {
   const S = new Int32Array(256); // data stack
   const C = new Int32Array(64); // call stack
@@ -18,7 +26,7 @@ function run(p, q) {
     const b = p[x];
     // Per opcode: immediate length (m), pops (u), pushes (w).
     let m = 0, u = 0, w = 0, ok = false;
-    if (b < 8) { ok = true; m = b === 1 ? 1 : b === 2 ? 4 : 0; u = +'00011223'[b]; w = +'0110233'[b]; }
+    if (b < 8) { ok = true; m = b === 1 ? 1 : b === 2 ? 4 : 0; u = PU8[b]; w = PW8[b]; }
     else if (b >= 16 && b <= 34) { ok = true; u = b === 23 || b === 27 ? 1 : 2; w = 1; }
     else if (b >= 48 && b <= 52) { ok = true; m = b === 52 ? 0 : 2; u = b === 49 || b === 50 ? 1 : 0; }
     else if (b === 64) { ok = true; u = 1; w = 1; }
